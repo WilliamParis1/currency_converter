@@ -20,7 +20,7 @@ CURRENCIES = [
 ]
 
 SOJU_PRICE_KRW = 2200
-ASSETS = os.path.dirname(os.path.abspath(__file__))
+ASSETS = os.path.join(os.path.expanduser("~"), "Downloads")
 
 
 def currency_code(selection: str) -> str:
