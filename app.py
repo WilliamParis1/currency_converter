@@ -1,5 +1,9 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
+from PIL import Image, ImageTk
+import datetime
+import os
+
 from currency_converter import get_exchange_rate
 
 CURRENCIES = [
@@ -15,8 +19,27 @@ CURRENCIES = [
     "INR - Indian Rupee",
 ]
 
+SOJU_PRICE_KRW = 2200
+ASSETS = os.path.dirname(os.path.abspath(__file__))
+
+
 def currency_code(selection: str) -> str:
     return selection.split(" - ")[0]
+
+
+def update_soju_bottom():
+    base = currency_code(from_var.get())
+    if base == "KRW":
+        soju_bottom_label.config(text="You need 2,200 KRW to buy one Strawberry Soju.")
+        return
+    rate = get_exchange_rate("KRW", base)
+    if rate:
+        cost = SOJU_PRICE_KRW * rate
+        soju_bottom_label.config(
+            text=f"You need {cost:,.2f} {base} to buy one Strawberry Soju."
+        )
+    else:
+        soju_bottom_label.config(text="Could not calculate Strawberry Soju price.")
 
 
 def convert():
@@ -36,81 +59,180 @@ def convert():
     if base == target:
         result_label.config(text=f"{amount:,.2f} {base} = {amount:,.2f} {target}")
         rate_label.config(text="Exchange rate: 1.0000")
+        update_soju_bottom()
         return
 
     rate = get_exchange_rate(base, target)
     if rate is None:
-        messagebox.showerror("Error", "Could not fetch exchange rate.\nCheck your internet connection.")
+        messagebox.showerror(
+            "Error", "Could not fetch exchange rate.\nCheck your internet connection."
+        )
         return
 
     result = amount * rate
     result_label.config(text=f"{amount:,.2f} {base} = {result:,.2f} {target}")
     rate_label.config(text=f"Exchange rate: 1 {base} = {rate:.4f} {target}")
+    update_soju_bottom()
+
+
+def load_gif_frames(path, size):
+    """Extract every frame from an animated GIF and resize it."""
+    img = Image.open(path)
+    frames = []
+    try:
+        while True:
+            frames.append(ImageTk.PhotoImage(img.copy().resize(size, Image.LANCZOS)))
+            img.seek(img.tell() + 1)
+    except EOFError:
+        pass
+    return frames
+
+
+def animate(label, frames, idx=0):
+    label.config(image=frames[idx])
+    label.after(80, animate, label, frames, (idx + 1) % len(frames))
 
 
 # ── Window ────────────────────────────────────────────────────────────────────
+WIN_W, WIN_H = 800, 580
+
 root = tk.Tk()
 root.title("Currency Converter")
 root.resizable(False, False)
+root.geometry(f"{WIN_W}x{WIN_H}")
 
-BG = "#f0f4f8"
-ACCENT = "#2d6a4f"
-BTN_FG = "#ffffff"
-FONT = ("Helvetica", 12)
-FONT_BOLD = ("Helvetica", 13, "bold")
-FONT_TITLE = ("Helvetica", 20, "bold")
-FONT_RESULT = ("Helvetica", 15, "bold")
+# ── Canvas + background ───────────────────────────────────────────────────────
+canvas = tk.Canvas(root, width=WIN_W, height=WIN_H, highlightthickness=0)
+canvas.pack(fill="both", expand=True)
 
-root.configure(bg=BG)
+bg_path = os.path.join(ASSETS, "strawberrywallpaper.jpg")
+if os.path.exists(bg_path):
+    _bg = Image.open(bg_path).resize((WIN_W, WIN_H), Image.LANCZOS)
+    bg_photo = ImageTk.PhotoImage(_bg)
+    canvas.create_image(0, 0, anchor="nw", image=bg_photo)
 
-frame = tk.Frame(root, bg=BG, padx=30, pady=24)
-frame.pack()
+# ── Styles ────────────────────────────────────────────────────────────────────
+PANEL_BG  = "#fff0f3"
+ACCENT    = "#c0003c"
+BTN_BG    = "#e6004a"
+BTN_FG    = "#ffffff"
+MUTED     = "#888888"
+
+FONT_TITLE  = ("Helvetica", 20, "bold")
+FONT_BOLD   = ("Helvetica", 13, "bold")
+FONT        = ("Helvetica", 12)
+FONT_RESULT = ("Helvetica", 14, "bold")
+FONT_SMALL  = ("Helvetica", 9)
+FONT_SOJU   = ("Helvetica", 11, "italic")
+
+# ── Left panel — form ─────────────────────────────────────────────────────────
+panel = tk.Frame(canvas, bg=PANEL_BG, padx=22, pady=20, bd=0, relief="flat")
+canvas.create_window(30, 30, anchor="nw", window=panel)
 
 # Title
-tk.Label(frame, text="Currency Converter", font=FONT_TITLE, bg=BG, fg=ACCENT).grid(
-    row=0, column=0, columnspan=2, pady=(0, 20)
+tk.Label(panel, text="Currency Converter", font=FONT_TITLE, bg=PANEL_BG, fg=ACCENT).grid(
+    row=0, column=0, columnspan=2, pady=(0, 16)
 )
 
-# Amount
-tk.Label(frame, text="Amount", font=FONT_BOLD, bg=BG, anchor="w").grid(
+# Amount label + entry
+tk.Label(panel, text="Amount", font=FONT_BOLD, bg=PANEL_BG, anchor="w").grid(
     row=1, column=0, columnspan=2, sticky="w"
 )
 amount_var = tk.StringVar()
-amount_entry = tk.Entry(frame, textvariable=amount_var, font=FONT, width=30, relief="solid", bd=1)
-amount_entry.grid(row=2, column=0, columnspan=2, pady=(4, 16), ipady=6, sticky="ew")
+tk.Entry(
+    panel, textvariable=amount_var, font=FONT, width=30, relief="solid", bd=1
+).grid(row=2, column=0, columnspan=2, pady=(4, 2), ipady=6, sticky="ew")
 
-# From
-tk.Label(frame, text="From", font=FONT_BOLD, bg=BG, anchor="w").grid(
-    row=3, column=0, sticky="w", padx=(0, 8)
+# Asterisk / rate date
+today_str = datetime.date.today().strftime("%B %d, %Y")
+tk.Label(
+    panel,
+    text=f"* Conversion rates as of {today_str}",
+    font=FONT_SMALL,
+    bg=PANEL_BG,
+    fg=MUTED,
+    anchor="w",
+).grid(row=3, column=0, columnspan=2, sticky="w", pady=(0, 14))
+
+# From / To dropdowns
+tk.Label(panel, text="From", font=FONT_BOLD, bg=PANEL_BG).grid(
+    row=4, column=0, sticky="w", padx=(0, 8)
 )
-tk.Label(frame, text="To", font=FONT_BOLD, bg=BG, anchor="w").grid(
-    row=3, column=1, sticky="w"
-)
+tk.Label(panel, text="To", font=FONT_BOLD, bg=PANEL_BG).grid(row=4, column=1, sticky="w")
 
 from_var = tk.StringVar(value=CURRENCIES[0])
-to_var = tk.StringVar(value=CURRENCIES[1])
+to_var   = tk.StringVar(value=CURRENCIES[1])
 
-from_menu = ttk.Combobox(frame, textvariable=from_var, values=CURRENCIES,
-                         state="readonly", font=FONT, width=22)
-from_menu.grid(row=4, column=0, pady=(4, 20), padx=(0, 8), ipady=4)
+ttk.Combobox(
+    panel, textvariable=from_var, values=CURRENCIES, state="readonly", font=FONT, width=21
+).grid(row=5, column=0, pady=(4, 16), padx=(0, 8), ipady=4)
 
-to_menu = ttk.Combobox(frame, textvariable=to_var, values=CURRENCIES,
-                       state="readonly", font=FONT, width=22)
-to_menu.grid(row=4, column=1, pady=(4, 20), ipady=4)
+ttk.Combobox(
+    panel, textvariable=to_var, values=CURRENCIES, state="readonly", font=FONT, width=21
+).grid(row=5, column=1, pady=(4, 16), ipady=4)
 
 # Convert button
 tk.Button(
-    frame, text="Convert", command=convert,
-    bg=ACCENT, fg=BTN_FG, font=FONT_BOLD,
-    relief="flat", cursor="hand2", padx=20, pady=8,
-    activebackground="#1b4332", activeforeground=BTN_FG,
-).grid(row=5, column=0, columnspan=2, pady=(0, 20), sticky="ew")
+    panel,
+    text="Convert",
+    command=convert,
+    bg=BTN_BG, fg=BTN_FG,
+    font=FONT_BOLD,
+    relief="flat",
+    cursor="hand2",
+    padx=20, pady=8,
+    activebackground="#99002e",
+    activeforeground=BTN_FG,
+).grid(row=6, column=0, columnspan=2, pady=(0, 16), sticky="ew")
 
-# Result
-result_label = tk.Label(frame, text="", font=FONT_RESULT, bg=BG, fg=ACCENT)
-result_label.grid(row=6, column=0, columnspan=2)
+# Result + rate labels
+result_label = tk.Label(panel, text="", font=FONT_RESULT, bg=PANEL_BG, fg=ACCENT)
+result_label.grid(row=7, column=0, columnspan=2)
 
-rate_label = tk.Label(frame, text="", font=("Helvetica", 10), bg=BG, fg="#6b7280")
-rate_label.grid(row=7, column=0, columnspan=2, pady=(4, 0))
+rate_label = tk.Label(panel, text="", font=FONT_SMALL, bg=PANEL_BG, fg=MUTED)
+rate_label.grid(row=8, column=0, columnspan=2, pady=(4, 0))
+
+# ── Right panel — soju GIF ────────────────────────────────────────────────────
+soju_panel = tk.Frame(canvas, bg=PANEL_BG, padx=14, pady=14, bd=0)
+canvas.create_window(WIN_W - 30, 60, anchor="ne", window=soju_panel)
+
+gif_path = os.path.join(ASSETS, "cutesoju.gif")
+if os.path.exists(gif_path):
+    gif_frames = load_gif_frames(gif_path, (140, 200))
+    gif_label  = tk.Label(soju_panel, bg=PANEL_BG)
+    gif_label.pack()
+    animate(gif_label, gif_frames)
+else:
+    tk.Label(
+        soju_panel,
+        text="[soju gif\nhere]",
+        font=FONT_SMALL,
+        bg=PANEL_BG,
+        fg=MUTED,
+        width=12,
+        height=10,
+        relief="dashed",
+        bd=1,
+    ).pack()
+
+tk.Label(soju_panel, text="2,200 KRW", font=FONT_BOLD, bg=PANEL_BG, fg=ACCENT).pack(
+    pady=(8, 0)
+)
+
+# ── Bottom — Strawberry Soju price message ────────────────────────────────────
+bottom_panel = tk.Frame(canvas, bg=PANEL_BG, padx=18, pady=10, bd=0)
+canvas.create_window(WIN_W // 2, WIN_H - 16, anchor="s", window=bottom_panel)
+
+soju_bottom_label = tk.Label(
+    bottom_panel,
+    text="Select currencies above and convert to see the Strawberry Soju price.",
+    font=FONT_SOJU,
+    bg=PANEL_BG,
+    fg=ACCENT,
+)
+soju_bottom_label.pack()
+
+# Populate soju bottom on startup
+update_soju_bottom()
 
 root.mainloop()
