@@ -211,7 +211,7 @@ else:
         fg=MUTED,
         width=12,
         height=10,
-        relief="dashed",
+        relief="solid",
         bd=1,
     ).pack()
 
