@@ -1,6 +1,24 @@
+import subprocess
+import sys
+
+def _install(package):
+    subprocess.check_call([sys.executable, "-m", "pip", "install", package],
+                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+try:
+    from PIL import Image, ImageTk
+except ImportError:
+    _install("pillow")
+    from PIL import Image, ImageTk
+
+try:
+    import requests
+except ImportError:
+    _install("requests")
+    import requests
+
 import tkinter as tk
 from tkinter import ttk, messagebox
-from PIL import Image, ImageTk
 import datetime
 import os
 
@@ -20,7 +38,7 @@ CURRENCIES = [
 ]
 
 SOJU_PRICE_KRW = 2200
-ASSETS = os.path.dirname(os.path.abspath(__file__))
+ASSETS = os.path.join(os.path.expanduser("~"), "Downloads")
 
 
 def currency_code(selection: str) -> str:
